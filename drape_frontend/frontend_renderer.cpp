@@ -211,6 +211,10 @@ void FrontendRenderer::UpdateCanBeDeletedStatus()
 
 void FrontendRenderer::AcceptMessage(ref_ptr<Message> message)
 {
+  // TODO: Temporary code.
+  if (m_apiVersion == dp::ApiVersion::Metal)
+    return;
+
   switch (message->GetType())
   {
   case Message::FlushTile:
@@ -1209,6 +1213,9 @@ void FrontendRenderer::EndUpdateOverlayTree()
 
 void FrontendRenderer::RenderScene(ScreenBase const & modelView, bool activeFrame)
 {
+  // TODO: Temporary code.
+  if (m_apiVersion == dp::ApiVersion::Metal)
+    return;
 #if defined(DRAPE_MEASURER) && (defined(RENDER_STATISTIC) || defined(TRACK_GPU_MEM))
   DrapeMeasurer::Instance().BeforeRenderFrame();
 #endif
@@ -1888,6 +1895,10 @@ void FrontendRenderer::OnContextCreate()
 
   // Render empty frame here to avoid black initialization screen.
   RenderEmptyFrame();
+
+  // TODO: Temporary code.
+  if (m_apiVersion == dp::ApiVersion::Metal)
+    return;
 
   dp::SupportManager::Instance().Init();
 
