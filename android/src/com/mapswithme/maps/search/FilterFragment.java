@@ -173,6 +173,7 @@ public class FilterFragment extends BaseMwmToolbarFragment
     super.onStop();
   }
 
+  @NonNull
   @Override
   protected ToolbarController onCreateToolbarController(@NonNull View root)
   {
@@ -340,8 +341,8 @@ public class FilterFragment extends BaseMwmToolbarFragment
   public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState)
   {
     super.onViewCreated(view, savedInstanceState);
-    mToolbarController.setTitle(R.string.booking_filters);
-    mToolbarController
+    getToolbarController().setTitle(R.string.booking_filters);
+    getToolbarController()
         .findViewById(R.id.reset)
         .setOnClickListener(
             v ->

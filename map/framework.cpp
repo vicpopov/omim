@@ -13,6 +13,7 @@
 #include "defines.hpp"
 #include "private.h"
 
+#include "routing/city_roads.hpp"
 #include "routing/index_router.hpp"
 #include "routing/online_absent_fetcher.hpp"
 #include "routing/route.hpp"
@@ -100,6 +101,7 @@
 
 #include "std/algorithm.hpp"
 #include "std/bind.hpp"
+#include "std/map.hpp"
 #include "std/target_os.hpp"
 
 #include "api/internal/c/api-client-internals.h"
@@ -227,6 +229,7 @@ void Framework::OnLocationUpdate(GpsInfo const & info)
 #endif
 
   m_routingManager.OnLocationUpdate(rInfo);
+  m_localAdsManager.OnLocationUpdate(rInfo, GetDrawScale());
 }
 
 void Framework::OnCompassUpdate(CompassInfo const & info)
@@ -3261,35 +3264,42 @@ void DrawLine(Box const & box, dp::Color const & color, df::DrapeApi & drapeApi,
 
   drapeApi.AddLine(id, df::DrapeApiLineData(points, color).Width(3.0f).ShowPoints(true).ShowId());
 }
+
+void VisualizeFeatureInRect(m2::RectD const & rect, FeatureType & ft, df::DrapeApi & drapeApi,
+                            size_t & counter)
+{
+  bool allPointsOutside = true;
+  vector<m2::PointD> points;
+  ft.ForEachPoint([&points, &rect, &allPointsOutside](m2::PointD const & pt)
+                  {
+                    if (rect.IsPointInside(pt))
+                      allPointsOutside = false;
+                    points.push_back(pt);
+                  }, scales::GetUpperScale());
+
+  if (!allPointsOutside)
+  {
+    size_t const colorIndex = counter % colorList.size();
+    // Note. The first param at DrapeApi::AddLine() should be unique. Other way last added line
+    // replaces the previous added line with the same name.
+    // As a consequence VisualizeFeatureInRect() should be applied to single mwm. Other way
+    // feature ids will be dubbed.
+    drapeApi.AddLine(
+        strings::to_string(ft.GetID().m_index),
+        df::DrapeApiLineData(points, colorList[colorIndex]).Width(3.0f).ShowPoints(true).ShowId());
+    counter++;
+  }
+}
 }  // namespace
 
 void Framework::VisualizeRoadsInRect(m2::RectD const & rect)
 {
-  int constexpr kScale = scales::GetUpperScale();
   size_t counter = 0;
   m_model.ForEachFeature(rect, [this, &counter, &rect](FeatureType & ft)
   {
     if (routing::IsRoad(feature::TypesHolder(ft)))
-    {
-      bool allPointsOutside = true;
-      vector<m2::PointD> points;
-      ft.ForEachPoint([&points, &rect, &allPointsOutside](m2::PointD const & pt)
-      {
-        if (rect.IsPointInside(pt))
-          allPointsOutside = false;
-        points.push_back(pt);
-      }, kScale);
-
-      if (!allPointsOutside)
-      {
-        size_t const colorIndex = counter % colorList.size();
-        m_drapeApi.AddLine(strings::to_string(ft.GetID().m_index),
-                           df::DrapeApiLineData(points, colorList[colorIndex])
-                                                .Width(3.0f).ShowPoints(true).ShowId());
-        counter++;
-      }
-    }
-  }, kScale);
+      VisualizeFeatureInRect(rect, ft, m_drapeApi, counter);
+  }, scales::GetUpperScale());
 }
 
 void Framework::VisualizeCityBoundariesInRect(m2::RectD const & rect)
@@ -3330,6 +3340,34 @@ void Framework::VisualizeCityBoundariesInRect(m2::RectD const & rect)
   }
 }
 
+void Framework::VisualizeCityRoadsInRect(m2::RectD const & rect)
+{
+  map<MwmSet::MwmId, unique_ptr<CityRoads>> cityRoads;
+  size_t counter = 0;
+  GetDataSource().ForEachInRect(
+      [this, &rect, &cityRoads, &counter](FeatureType & ft) {
+        if (ft.GetFeatureType() != feature::GEOM_LINE)
+          return;
+
+        auto const & mwmId = ft.GetID().m_mwmId;
+        auto const it = cityRoads.find(mwmId);
+        if (it == cityRoads.cend())
+        {
+          MwmSet::MwmHandle handle = m_model.GetDataSource().GetMwmHandleById(mwmId);
+          if (!handle.IsAlive())
+            return;
+
+          cityRoads[mwmId] = LoadCityRoads(GetDataSource(), handle);
+        }
+
+        if (!cityRoads[mwmId]->IsCityRoad(ft.GetID().m_index))
+          return;  // ft is not a city road.
+
+        VisualizeFeatureInRect(rect, ft, m_drapeApi, counter);
+      },
+      rect, scales::GetUpperScale());
+}
+
 ads::Engine const & Framework::GetAdsEngine() const
 {
   ASSERT(m_adsEngine, ());
@@ -3340,6 +3378,24 @@ void Framework::DisableAdProvider(ads::Banner::Type const type, ads::Banner::Pla
 {
   ASSERT(m_adsEngine, ());
   m_adsEngine.get()->DisableAdProvider(type, place);
+}
+
+bool Framework::HasRuTaxiCategoryBanner()
+{
+  auto const & purchase = GetPurchase();
+  if (purchase && purchase->IsSubscriptionActive(SubscriptionType::RemoveAds))
+    return false;
+
+  auto const position = GetCurrentPosition();
+  if (!position)
+    return false;
+
+  auto const taxiEngine = GetTaxiEngine(platform::GetCurrentNetworkPolicy());
+  if (!taxiEngine)
+    return false;
+
+  auto const providers = taxiEngine->GetProvidersAtPos(MercatorBounds::ToLatLon(position.get()));
+  return std::find(providers.begin(), providers.end(), taxi::Provider::Rutaxi) != providers.end();
 }
 
 void Framework::RunUITask(function<void()> fn)

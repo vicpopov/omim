@@ -50,4 +50,9 @@ public abstract class BaseMwmAuthorizationFragment extends BaseMwmToolbarFragmen
   {
     return isAdded();
   }
+
+  protected boolean isAuthorized()
+  {
+    return mAuthorizer.isAuthorized();
+  }
 }

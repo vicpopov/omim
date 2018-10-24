@@ -23,10 +23,10 @@ public class AuthFragment extends BaseMwmToolbarFragment
   }
 
   @Override
-  public void onViewCreated(View view, @Nullable Bundle savedInstanceState)
+  public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState)
   {
     super.onViewCreated(view, savedInstanceState);
-    mToolbarController.setTitle(R.string.thank_you);
+    getToolbarController().setTitle(R.string.thank_you);
     OsmAuthFragmentDelegate osmAuthDelegate = new OsmAuthFragmentDelegate(this)
     {
       @Override
@@ -38,6 +38,7 @@ public class AuthFragment extends BaseMwmToolbarFragment
     osmAuthDelegate.onViewCreated(view, savedInstanceState);
   }
 
+  @NonNull
   @Override
   protected ToolbarController onCreateToolbarController(@NonNull View root)
   {

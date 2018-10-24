@@ -5,11 +5,14 @@ import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.text.TextUtils;
 
+import android.util.Base64;
 import com.mapswithme.maps.BuildConfig;
 import com.mapswithme.maps.Framework;
 import com.mapswithme.util.log.Logger;
 import com.mapswithme.util.log.LoggerFactory;
 
+import javax.net.ssl.HttpsURLConnection;
+import javax.net.ssl.SSLSocketFactory;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
@@ -50,9 +53,11 @@ public final class HttpUploader
   private final String mBoundary;
   @NonNull
   private final String mEndPart;
+  private final boolean mNeedClientAuth;
 
   public HttpUploader(@NonNull String method, @NonNull String url, @NonNull KeyValue[] params,
-                      @NonNull KeyValue[] headers, @NonNull String fileKey, @NonNull String filePath)
+                      @NonNull KeyValue[] headers, @NonNull String fileKey, @NonNull String filePath,
+                      boolean needClientAuth)
   {
     mMethod = method;
     mUrl = url;
@@ -62,6 +67,7 @@ public final class HttpUploader
     mParams = new ArrayList<>(Arrays.asList(params));
     mHeaders = new ArrayList<>(Arrays.asList(headers));
     mEndPart = LINE_FEED + "--" + mBoundary + "--" + LINE_FEED;
+    mNeedClientAuth = needClientAuth;
   }
 
   public Result upload()
@@ -80,6 +86,15 @@ public final class HttpUploader
       connection.setUseCaches(false);
       connection.setRequestMethod(mMethod);
       connection.setDoOutput(mMethod.equals("POST"));
+      if ("https".equals(connection.getURL().getProtocol()) && mNeedClientAuth)
+      {
+        HttpsURLConnection httpsConnection = (HttpsURLConnection) connection;
+        String cert = HttpUploader.nativeUserBindingCertificate();
+        String pwd = HttpUploader.nativeUserBindingPassword();
+        byte[] decodedCert = Base64.decode(cert, Base64.DEFAULT);
+        SSLSocketFactory socketFactory = ClientCertTLSSocketFactory.create(decodedCert, pwd.toCharArray());
+        httpsConnection.setSSLSocketFactory(socketFactory);
+      }
 
       long fileSize = StorageUtils.getFileSize(mFilePath);
       StringBuilder paramsBuilder = new StringBuilder();
@@ -269,4 +284,10 @@ public final class HttpUploader
       return mDescription;
     }
   }
+
+  @NonNull
+  public static native String nativeUserBindingCertificate();
+
+  @NonNull
+  public static native String nativeUserBindingPassword();
 }

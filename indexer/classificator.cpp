@@ -373,12 +373,8 @@ void Classificator::ReadClassificator(istream & s)
   m_coastType = GetTypeByPath({ "natural", "coastline" });
 }
 
-void Classificator::SortClassificator()
-{
-  GetMutableRoot()->Sort();
-}
-
-template <class IterT> uint32_t Classificator::GetTypeByPathImpl(IterT beg, IterT end) const
+template <typename Iter>
+uint32_t Classificator::GetTypeByPathImpl(Iter beg, Iter end) const
 {
   ClassifObject const * p = GetRoot();
 

@@ -18,6 +18,7 @@ import com.mapswithme.maps.api.ParsedUrlMwmRequest;
 import com.mapswithme.maps.auth.AuthorizationListener;
 import com.mapswithme.maps.bookmarks.data.DistanceAndAzimut;
 import com.mapswithme.maps.bookmarks.data.MapObject;
+import com.mapswithme.maps.gdpr.UserBindingListener;
 import com.mapswithme.maps.location.LocationHelper;
 import com.mapswithme.maps.routing.RouteMarkData;
 import com.mapswithme.maps.routing.RoutePointInfo;
@@ -74,13 +75,14 @@ public class Framework
 
   @Retention(RetentionPolicy.SOURCE)
   @IntDef({LOCAL_ADS_EVENT_SHOW_POINT, LOCAL_ADS_EVENT_OPEN_INFO, LOCAL_ADS_EVENT_CLICKED_PHONE,
-           LOCAL_ADS_EVENT_CLICKED_WEBSITE})
+           LOCAL_ADS_EVENT_CLICKED_WEBSITE, LOCAL_ADS_EVENT_VISIT})
   public @interface LocalAdsEventType {}
 
   public static final int LOCAL_ADS_EVENT_SHOW_POINT = 0;
   public static final int LOCAL_ADS_EVENT_OPEN_INFO = 1;
   public static final int LOCAL_ADS_EVENT_CLICKED_PHONE = 2;
   public static final int LOCAL_ADS_EVENT_CLICKED_WEBSITE = 3;
+  public static final int LOCAL_ADS_EVENT_VISIT = 4;
 
   @Retention(RetentionPolicy.SOURCE)
   @IntDef({ROUTE_REBUILD_AFTER_POINTS_LOADING})
@@ -147,6 +149,12 @@ public class Framework
   {
     void onValidatePurchase(@PurchaseValidationCode int code, @NonNull String serverId,
                             @NonNull String vendorId, @NonNull String purchaseToken);
+  }
+
+  @SuppressWarnings("unused")
+  public interface StartTransactionListener
+  {
+    void onStartTransaction(boolean success, @NonNull String serverId, @NonNull String vendorId);
   }
 
   public static class Params3dMode
@@ -474,7 +482,14 @@ public class Framework
   @NonNull
   public static native String nativeGetMegafonDownloaderBannerUrl();
 
+  public static native boolean nativeHasRuTaxiCategoryBanner();
+
   public static native void nativeMakeCrash();
+
+  public static native void nativeStartPurchaseTransaction(@NonNull String serverId,
+                                                           @NonNull String vendorId);
+  public static native void nativeStartPurchaseTransactionListener(@Nullable
+    StartTransactionListener listener);
 
   public static native void nativeValidatePurchase(@NonNull String serverId,
                                                    @NonNull String vendorId,
@@ -490,4 +505,6 @@ public class Framework
   private static native void nativeTipsShown(int tipType, int event);
 
   private static native void nativeDisableAdProvider(int provider, int bannerPlace);
+
+  public static native void nativeBindUser(@NonNull UserBindingListener listener);
 }

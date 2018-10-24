@@ -31,6 +31,8 @@ jmethodID g_onRestoredFilesPreparedMethod;
 jmethodID g_onImportStartedMethod;
 jmethodID g_onImportFinishedMethod;
 jmethodID g_onTagsReceivedMethod;
+jmethodID g_onUploadStartedMethod;
+jmethodID g_onUploadFinishedMethod;
 jclass g_bookmarkCategoryClass;
 jmethodID g_bookmarkCategoryConstructor;
 jclass g_catalogTagClass;
@@ -78,6 +80,10 @@ void PrepareClassRefs(JNIEnv * env)
   g_onTagsReceivedMethod =
     jni::GetMethodID(env, bookmarkManagerInstance, "onTagsReceived",
                      "(Z[Lcom/mapswithme/maps/bookmarks/data/CatalogTagsGroup;)V");
+  g_onUploadStartedMethod =
+    jni::GetMethodID(env, bookmarkManagerInstance, "onUploadStarted", "(J)V");
+  g_onUploadFinishedMethod =
+    jni::GetMethodID(env, bookmarkManagerInstance, "onUploadFinished", "(ILjava/lang/String;JJ)V");
 
   g_bookmarkCategoryClass =
     jni::GetGlobalClassRef(env, "com/mapswithme/maps/bookmarks/data/BookmarkCategory");
@@ -280,6 +286,30 @@ void OnTagsReceived(JNIEnv * env, bool successful, BookmarkCatalog::TagGroups co
   }));
   jni::HandleJavaException(env);
 }
+
+void OnUploadStarted(JNIEnv * env, kml::MarkGroupId originCategoryId)
+{
+  ASSERT(g_bookmarkManagerClass, ());
+  jobject bookmarkManagerInstance = env->GetStaticObjectField(g_bookmarkManagerClass,
+                                                              g_bookmarkManagerInstanceField);
+  env->CallVoidMethod(bookmarkManagerInstance, g_onUploadStartedMethod,
+                      static_cast<jlong>(originCategoryId));
+  jni::HandleJavaException(env);
+}
+
+void OnUploadFinished(JNIEnv * env, BookmarkCatalog::UploadResult uploadResult,
+                      std::string const & description, kml::MarkGroupId originCategoryId,
+                      kml::MarkGroupId resultCategoryId)
+{
+  ASSERT(g_bookmarkManagerClass, ());
+  jobject bookmarkManagerInstance = env->GetStaticObjectField(g_bookmarkManagerClass,
+                                                              g_bookmarkManagerInstanceField);
+  jni::TScopedLocalRef const descriptionStr(env, jni::ToJavaString(env, description));
+  env->CallVoidMethod(bookmarkManagerInstance, g_onUploadFinishedMethod,
+                      static_cast<jint>(uploadResult), descriptionStr.get(),
+                      static_cast<jlong>(originCategoryId), static_cast<jlong>(resultCategoryId));
+  jni::HandleJavaException(env);
+}
 }  // namespace
 
 extern "C"
@@ -312,7 +342,9 @@ Java_com_mapswithme_maps_bookmarks_data_BookmarkManager_nativeLoadBookmarks(JNIE
 
   frm()->GetBookmarkManager().SetCatalogHandlers(nullptr, nullptr,
                                                  std::bind(&OnImportStarted, env, _1),
-                                                 std::bind(&OnImportFinished, env, _1, _2, _3));
+                                                 std::bind(&OnImportFinished, env, _1, _2, _3),
+                                                 std::bind(&OnUploadStarted, env, _1),
+                                                 std::bind(&OnUploadFinished, env, _1, _2, _3, _4));
   frm()->LoadBookmarks();
 }
 
@@ -729,6 +761,15 @@ Java_com_mapswithme_maps_bookmarks_data_BookmarkManager_nativeImportFromCatalog(
   bm.ImportDownloadedFromCatalog(ToNativeString(env, serverId), ToNativeString(env, filePath));
 }
 
+JNIEXPORT void JNICALL
+Java_com_mapswithme_maps_bookmarks_data_BookmarkManager_nativeUploadToCatalog(
+        JNIEnv * env, jobject, jint accessRules, jlong catId)
+{
+  auto & bm = frm()->GetBookmarkManager();
+  bm.UploadToCatalog(static_cast<kml::MarkGroupId>(catId),
+                     static_cast<kml::AccessRules>(accessRules));
+}
+
 JNIEXPORT jstring JNICALL
 Java_com_mapswithme_maps_bookmarks_data_BookmarkManager_nativeGetCatalogDeeplink(
         JNIEnv * env, jobject, jlong catId)
@@ -778,33 +819,39 @@ Java_com_mapswithme_maps_bookmarks_data_BookmarkManager_nativeGetBookmarkCategor
 {
   auto const & bm = frm()->GetBookmarkManager();
   kml::GroupIdCollection const & categories = bm.GetBmGroupsIdList();
+  auto const bookmarkConverter = [](JNIEnv * env, kml::MarkGroupId const & item)
+  {
+    auto const & manager = frm()->GetBookmarkManager();
+    auto const & data = manager.GetCategoryData(item);
+    auto const isFromCatalog = manager.IsCategoryFromCatalog(item);
+    auto const tracksCount = manager.GetTrackIds(data.m_id).size();
+    auto const bookmarksCount = manager.GetUserMarkIds(data.m_id).size();
+    auto const isMyCategory = manager.IsMyCategory(item);
+    auto const isVisible = manager.IsVisible(data.m_id);
+    auto const preferBookmarkStr = GetPreferredBookmarkStr(data.m_name);
+    auto const annotation = GetPreferredBookmarkStr(data.m_annotation);
+    auto const description = GetPreferredBookmarkStr(data.m_description);
 
-  return ToJavaArray(env,
-                     g_bookmarkCategoryClass,
-                     categories,
-                     [](JNIEnv * env, kml::MarkGroupId const & item)
-                     {
-                       auto const & manager = frm()->GetBookmarkManager();
-                       auto const & data = manager.GetCategoryData(item);
-                       auto const isFromCatalog = manager.IsCategoryFromCatalog(item);
-                       auto const tracksCount = manager.GetTrackIds(data.m_id).size();
-                       auto const bookmarksCount = manager.GetUserMarkIds(data.m_id).size();
-                       auto const isMyCategory = manager.IsMyCategory(item);
-                       auto const isVisible = manager.IsVisible(data.m_id);
-
-                       return env->NewObject(g_bookmarkCategoryClass,
-                                             g_bookmarkCategoryConstructor,
-                                             static_cast<jlong>(data.m_id),
-                                             jni::ToJavaString(env, GetPreferredBookmarkStr(data.m_name)),
-                                             jni::ToJavaString(env, data.m_authorId),
-                                             jni::ToJavaString(env, data.m_authorName),
-                                             jni::ToJavaString(env, GetPreferredBookmarkStr(data.m_annotation)),
-                                             jni::ToJavaString(env, GetPreferredBookmarkStr(data.m_description)),
-                                             static_cast<jint>(tracksCount),
-                                             static_cast<jint>(bookmarksCount),
-                                             static_cast<jboolean>(isFromCatalog),
-                                             static_cast<jboolean>(isMyCategory),
-                                             static_cast<jboolean>(isVisible));
-                     });
+    jni::TScopedLocalRef preferBookmarkStrRef(env, jni::ToJavaString(env, preferBookmarkStr));
+    jni::TScopedLocalRef authorIdRef(env, jni::ToJavaString(env, data.m_authorId));
+    jni::TScopedLocalRef authorNameRef(env, jni::ToJavaString(env, data.m_authorName));
+    jni::TScopedLocalRef annotationRef(env, jni::ToJavaString(env, annotation));
+    jni::TScopedLocalRef descriptionRef(env, jni::ToJavaString(env, description));
+      
+    return env->NewObject(g_bookmarkCategoryClass,
+                          g_bookmarkCategoryConstructor,
+                          static_cast<jlong>(data.m_id),
+                          preferBookmarkStrRef.get(),
+                          authorIdRef.get(),
+                          authorNameRef.get(),
+                          annotationRef.get(),
+                          descriptionRef.get(),
+                          static_cast<jint>(tracksCount),
+                          static_cast<jint>(bookmarksCount),
+                          static_cast<jboolean>(isFromCatalog),
+                          static_cast<jboolean>(isMyCategory),
+                          static_cast<jboolean>(isVisible));
+  };
+  return ToJavaArray(env, g_bookmarkCategoryClass, categories, bookmarkConverter);
 }
 }  // extern "C"

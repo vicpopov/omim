@@ -735,6 +735,21 @@ void CallPurchaseValidationListener(shared_ptr<jobject> listener, Purchase::Vali
                       receiptData.get());
 }
 
+void CallStartPurchaseTransactionListener(shared_ptr<jobject> listener, bool success,
+                                          std::string const & serverId,
+                                          std::string const & vendorId)
+{
+  JNIEnv * env = jni::GetEnv();
+  jmethodID const methodId = jni::GetMethodID(env, *listener, "onStartTransaction",
+                                              "(ZLjava/lang/String;Ljava/lang/String;)V");
+
+  jni::TScopedLocalRef const serverIdStr(env, jni::ToJavaString(env, serverId));
+  jni::TScopedLocalRef const vendorIdStr(env, jni::ToJavaString(env, vendorId));
+
+  env->CallVoidMethod(*listener, methodId, static_cast<jboolean>(success),
+                      serverIdStr.get(), vendorIdStr.get());
+}
+
 /// @name JNI EXPORTS
 //@{
 JNIEXPORT jstring JNICALL
@@ -1678,7 +1693,7 @@ Java_com_mapswithme_maps_Framework_nativeAuthenticateUser(JNIEnv * env, jclass, 
     GetPlatform().RunTask(Platform::Thread::Gui, [gListener, success]
     {
       auto e = jni::GetEnv();
-      static jmethodID const callback = jni::GetMethodID(e, gListener.get(), "onAuthorized", "(Z)V");
+      jmethodID const callback = jni::GetMethodID(e, gListener.get(), "onAuthorized", "(Z)V");
       e->CallVoidMethod(gListener.get(), callback, success);
     });
   };
@@ -1749,6 +1764,12 @@ Java_com_mapswithme_maps_Framework_nativeHasMegafonDownloaderBanner(JNIEnv * env
                                                                languages::GetCurrentNorm()));
 }
 
+JNIEXPORT jboolean JNICALL
+Java_com_mapswithme_maps_Framework_nativeHasRuTaxiCategoryBanner(JNIEnv * env, jclass)
+{
+  return static_cast<jboolean>(frm()->HasRuTaxiCategoryBanner());
+}
+
 JNIEXPORT jstring JNICALL
 Java_com_mapswithme_maps_Framework_nativeGetMegafonDownloaderBannerUrl(JNIEnv * env, jclass)
 {
@@ -1778,6 +1799,20 @@ Java_com_mapswithme_maps_Framework_nativeValidatePurchase(JNIEnv * env, jclass, 
 }
 
 JNIEXPORT void JNICALL
+Java_com_mapswithme_maps_Framework_nativeStartPurchaseTransaction(JNIEnv * env, jclass,
+                                                                  jstring serverId,
+                                                                  jstring vendorId)
+{
+  auto const & purchase = frm()->GetPurchase();
+  if (purchase == nullptr)
+    return;
+
+  purchase->StartTransaction(jni::ToNativeString(env, serverId),
+                             jni::ToNativeString(env, vendorId),
+                             frm()->GetUser().GetAccessToken());
+}
+
+JNIEXPORT void JNICALL
 Java_com_mapswithme_maps_Framework_nativeSetPurchaseValidationListener(JNIEnv *, jclass,
                                                                        jobject listener)
 {
@@ -1793,6 +1828,25 @@ Java_com_mapswithme_maps_Framework_nativeSetPurchaseValidationListener(JNIEnv *,
   else
   {
     purchase->SetValidationCallback(nullptr);
+  }
+}
+
+JNIEXPORT void JNICALL
+Java_com_mapswithme_maps_Framework_nativeStartPurchaseTransactionListener(JNIEnv *, jclass,
+                                                                          jobject listener)
+{
+  auto const & purchase = frm()->GetPurchase();
+  if (purchase == nullptr)
+    return;
+
+  if (listener != nullptr)
+  {
+    purchase->SetStartTransactionCallback(bind(&CallStartPurchaseTransactionListener,
+                                          jni::make_global_ref(listener), _1, _2, _3));
+  }
+  else
+  {
+    purchase->SetStartTransactionCallback(nullptr);
   }
 }
 
@@ -1821,5 +1875,18 @@ Java_com_mapswithme_maps_Framework_nativeGetCurrentTipsApi(JNIEnv * env, jclass)
   auto const & tipsApi = frm()->GetTipsApi();
   auto const tip = tipsApi.GetTip();
   return tip.is_initialized() ? static_cast<jint>(tip.get()) : kUndefinedTip;
+}
+
+JNIEXPORT void JNICALL
+Java_com_mapswithme_maps_Framework_nativeBindUser(JNIEnv * env, jclass, jobject listener)
+{
+  auto listenerRef = jni::make_global_ref(listener);
+  auto & user = frm()->GetUser();
+  user.BindUser([listenerRef](bool success)
+  {
+    auto e = jni::GetEnv();
+    jmethodID const callback = jni::GetMethodID(e, *listenerRef, "onUserBound", "(Z)V");
+    e->CallVoidMethod(*listenerRef, callback, static_cast<jboolean>(success));
+  });
 }
 }  // extern "C"

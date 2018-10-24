@@ -9,7 +9,9 @@ import com.mapswithme.maps.widget.ToolbarController;
 
 public class BaseMwmToolbarFragment extends BaseMwmFragment
 {
-  protected ToolbarController mToolbarController;
+  @SuppressWarnings("NullableProblems")
+  @NonNull
+  private ToolbarController mToolbarController;
 
   @Override
   public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState)
@@ -17,8 +19,15 @@ public class BaseMwmToolbarFragment extends BaseMwmFragment
     mToolbarController = onCreateToolbarController(view);
   }
 
+  @NonNull
   protected ToolbarController onCreateToolbarController(@NonNull View root)
   {
     return new ToolbarController(root, getActivity());
+  }
+
+  @NonNull
+  protected ToolbarController getToolbarController()
+  {
+    return mToolbarController;
   }
 }

@@ -22,6 +22,7 @@
 #include "defines.hpp"
 
 #include <algorithm>
+#include <unordered_map>
 #include <utility>
 
 using namespace routing;
@@ -35,6 +36,7 @@ using TagMapping = routing::RoadAccessTagProcessor::TagMapping;
 
 TagMapping const kMotorCarTagMapping = {
     {OsmElement::Tag("motorcar", "yes"), RoadAccess::Type::Yes},
+    {OsmElement::Tag("motorcar", "designated"), RoadAccess::Type::Yes},
     {OsmElement::Tag("motorcar", "permissive"), RoadAccess::Type::Yes},
     {OsmElement::Tag("motorcar", "no"), RoadAccess::Type::No},
     {OsmElement::Tag("motorcar", "private"), RoadAccess::Type::Private},
@@ -43,6 +45,7 @@ TagMapping const kMotorCarTagMapping = {
 
 TagMapping const kMotorVehicleTagMapping = {
     {OsmElement::Tag("motor_vehicle", "yes"), RoadAccess::Type::Yes},
+    {OsmElement::Tag("motor_vehicle", "designated"), RoadAccess::Type::Yes},
     {OsmElement::Tag("motor_vehicle", "permissive"), RoadAccess::Type::Yes},
     {OsmElement::Tag("motor_vehicle", "no"), RoadAccess::Type::No},
     {OsmElement::Tag("motor_vehicle", "private"), RoadAccess::Type::Private},
@@ -51,6 +54,7 @@ TagMapping const kMotorVehicleTagMapping = {
 
 TagMapping const kVehicleTagMapping = {
     {OsmElement::Tag("vehicle", "yes"), RoadAccess::Type::Yes},
+    {OsmElement::Tag("vehicle", "designated"), RoadAccess::Type::Yes},
     {OsmElement::Tag("vehicle", "permissive"), RoadAccess::Type::Yes},
     {OsmElement::Tag("vehicle", "no"), RoadAccess::Type::No},
     {OsmElement::Tag("vehicle", "private"), RoadAccess::Type::Private},
@@ -72,6 +76,7 @@ TagMapping const kCarBarriersTagMapping = {
 
 TagMapping const kPedestrianTagMapping = {
     {OsmElement::Tag("foot", "yes"), RoadAccess::Type::Yes},
+    {OsmElement::Tag("foot", "designated"), RoadAccess::Type::Yes},
     {OsmElement::Tag("foot", "permissive"), RoadAccess::Type::Yes},
     {OsmElement::Tag("foot", "no"), RoadAccess::Type::No},
     {OsmElement::Tag("foot", "private"), RoadAccess::Type::Private},
@@ -80,6 +85,7 @@ TagMapping const kPedestrianTagMapping = {
 
 TagMapping const kBicycleTagMapping = {
     {OsmElement::Tag("bicycle", "yes"), RoadAccess::Type::Yes},
+    {OsmElement::Tag("bicycle", "designated"), RoadAccess::Type::Yes},
     {OsmElement::Tag("bicycle", "permissive"), RoadAccess::Type::Yes},
     {OsmElement::Tag("bicycle", "no"), RoadAccess::Type::No},
     {OsmElement::Tag("bicycle", "private"), RoadAccess::Type::Private},
@@ -120,8 +126,8 @@ bool ParseRoadAccess(string const & roadAccessPath,
 
   vector<uint32_t> privateRoads;
 
-  map<uint32_t, RoadAccess::Type> featureType[static_cast<size_t>(VehicleType::Count)];
-  map<RoadPoint, RoadAccess::Type> pointType[static_cast<size_t>(VehicleType::Count)];
+  unordered_map<uint32_t, RoadAccess::Type> featureType[static_cast<size_t>(VehicleType::Count)];
+  unordered_map<RoadPoint, RoadAccess::Type, RoadPoint::Hash> pointType[static_cast<size_t>(VehicleType::Count)];
 
   auto addFeature = [&](uint32_t featureId, VehicleType vehicleType,
                         RoadAccess::Type roadAccessType, uint64_t osmId) {

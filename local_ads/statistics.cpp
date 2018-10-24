@@ -130,7 +130,7 @@ local_ads::Timestamp GetMaxTimestamp(std::list<local_ads::Event> const & events,
 
 std::string GetPath(std::string const & fileName)
 {
-  return base::JoinFoldersToPath({GetPlatform().WritableDir(), kStatisticsFolderName}, fileName);
+  return base::JoinFoldersToPath({GetPlatform().SettingsDir(), kStatisticsFolderName}, fileName);
 }
 
 std::string GetPath(local_ads::Event const & event)
@@ -198,8 +198,6 @@ std::vector<uint8_t> SerializeForServer(std::list<local_ads::Event> const & even
   ASSERT(!events.empty(), ());
   auto root = base::NewJSONObject();
   ToJSONObject(*root, "userId", userId);
-  static std::string offlineId = GetPlatform().MacAddress(true /* md5Decoded */);
-  ToJSONObject(*root, "offlineId", offlineId);
   ToJSONObject(*root, "countryId", events.front().m_countryId);
   ToJSONObject(*root, "mwmVersion", events.front().m_mwmVersion);
   auto eventsNode = base::NewJSONArray();
@@ -268,6 +266,12 @@ void Statistics::RegisterEvents(std::list<Event> && events)
     return;
   GetPlatform().RunTask(Platform::Thread::File,
                         std::bind(&Statistics::ProcessEvents, this, std::move(events)));
+}
+
+void Statistics::RegisterEventSync(Event && event)
+{
+  std::list<Event> events = {std::move(event)};
+  ProcessEvents(events);
 }
 
 void Statistics::SetEnabled(bool isEnabled)

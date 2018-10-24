@@ -390,7 +390,9 @@ using namespace osm_auth_ios;
   if (@available(iOS 10, *))
     [UNUserNotificationCenter currentNotificationCenter].delegate = self;
 
-  [[SubscriptionManager shared] validate];
+  if ([MWMFrameworkHelper canUseNetwork])
+    [[SubscriptionManager shared] validate];
+  
   return YES;
 }
 
@@ -749,20 +751,24 @@ didReceiveNotificationResponse:(UNNotificationResponse *)response
 {
   m_sourceApplication = options[UIApplicationOpenURLOptionsSourceApplicationKey];
 
-  if ([self checkLaunchURL:[url.host rangeOfString:@"dlink.maps.me"].location != NSNotFound
-       ? [self convertUniversalLink:url] : url])
-  {
-    [self handleURLs];
-    return YES;
-  }
-
   BOOL isGoogleURL = [[GIDSignIn sharedInstance] handleURL:url
                                          sourceApplication:m_sourceApplication
                                                 annotation:options[UIApplicationOpenURLOptionsAnnotationKey]];
   if (isGoogleURL)
     return YES;
 
-  return [[FBSDKApplicationDelegate sharedInstance] application:app openURL:url options:options];
+  BOOL isFBURL = [[FBSDKApplicationDelegate sharedInstance] application:app openURL:url options:options];
+  if (isFBURL)
+    return YES;
+
+  if ([self checkLaunchURL:(url.host.length > 0 && [url.host rangeOfString:@"dlink.maps.me"].location != NSNotFound)
+       ? [self convertUniversalLink:url] : url])
+  {
+    [self handleURLs];
+    return YES;
+  }
+
+  return NO;
 }
 
 - (BOOL)checkLaunchURL:(NSURL *)url

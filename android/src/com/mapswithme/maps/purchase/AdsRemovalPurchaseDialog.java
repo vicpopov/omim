@@ -25,6 +25,7 @@ import com.mapswithme.util.log.Logger;
 import com.mapswithme.util.log.LoggerFactory;
 import com.mapswithme.util.statistics.Statistics;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
@@ -36,7 +37,7 @@ public class AdsRemovalPurchaseDialog extends BaseMwmDialogFragment implements A
   private final static String EXTRA_PRODUCT_DETAILS = "extra_product_details";
   private final static String EXTRA_ACTIVATION_RESULT = "extra_activation_result";
   private final static int WEEKS_IN_YEAR = 52;
-  private final static int WEEKS_IN_MONTH = 4;
+  private final static int MONTHS_IN_YEAR = 12;
   final static int REQ_CODE_PRODUCT_DETAILS_FAILURE = 1;
   final static int REQ_CODE_PAYMENT_FAILURE = 2;
   final static int REQ_CODE_VALIDATION_SERVER_ERROR = 3;
@@ -47,11 +48,11 @@ public class AdsRemovalPurchaseDialog extends BaseMwmDialogFragment implements A
   @NonNull
   private AdsRemovalPaymentState mState = AdsRemovalPaymentState.NONE;
   @Nullable
-  private PurchaseController<AdsRemovalPurchaseCallback> mController;
+  private AdsRemovalPurchaseControllerProvider mControllerProvider;
   @NonNull
   private PurchaseCallback mPurchaseCallback = new PurchaseCallback();
-  @Nullable
-  private AdsRemovalActivationCallback mActivationCallback;
+  @NonNull
+  private List<AdsRemovalActivationCallback> mActivationCallbacks = new ArrayList<>();
   @SuppressWarnings("NullableProblems")
   @NonNull
   private View mYearlyButton;
@@ -77,11 +78,11 @@ public class AdsRemovalPurchaseDialog extends BaseMwmDialogFragment implements A
   {
     super.onAttach(context);
     LOGGER.d(TAG, "onAttach");
-    mController = ((AdsRemovalPurchaseControllerProvider) context).getAdsRemovalPurchaseController();
-    if (mController != null)
-      mController.addCallback(mPurchaseCallback);
+    mControllerProvider = (AdsRemovalPurchaseControllerProvider) context;
     if (context instanceof AdsRemovalActivationCallback)
-      mActivationCallback = (AdsRemovalActivationCallback) context;
+      mActivationCallbacks.add((AdsRemovalActivationCallback) context);
+    if (getParentFragment() instanceof AdsRemovalActivationCallback)
+      mActivationCallbacks.add((AdsRemovalActivationCallback) getParentFragment());
   }
 
   @Nullable
@@ -139,6 +140,7 @@ public class AdsRemovalPurchaseDialog extends BaseMwmDialogFragment implements A
   public void onStart()
   {
     super.onStart();
+    getControllerOrThrow().addCallback(mPurchaseCallback);
     mPurchaseCallback.attach(this);
   }
 
@@ -146,6 +148,7 @@ public class AdsRemovalPurchaseDialog extends BaseMwmDialogFragment implements A
   public void onStop()
   {
     super.onStop();
+    getControllerOrThrow().removeCallback();
     mPurchaseCallback.detach();
   }
 
@@ -203,10 +206,15 @@ public class AdsRemovalPurchaseDialog extends BaseMwmDialogFragment implements A
   @NonNull
   private PurchaseController<AdsRemovalPurchaseCallback> getControllerOrThrow()
   {
-    if (mController == null)
+    if (mControllerProvider == null)
+      throw new IllegalStateException("Controller provider must be non-null at this point!");
+
+    PurchaseController<AdsRemovalPurchaseCallback> controller
+        = mControllerProvider.getAdsRemovalPurchaseController();
+    if (controller == null)
       throw new IllegalStateException("Controller must be non-null at this point!");
 
-    return mController;
+    return controller;
   }
 
   @Override
@@ -230,18 +238,18 @@ public class AdsRemovalPurchaseDialog extends BaseMwmDialogFragment implements A
   public void onDetach()
   {
     LOGGER.d(TAG, "onDetach");
+    mControllerProvider = null;
+    mActivationCallbacks.clear();
     super.onDetach();
-    if (mController != null)
-    {
-      mController.removeCallback();
-      mController = null;
-    }
   }
 
   void finishValidation()
   {
-    if (mActivationResult && mActivationCallback != null)
-      mActivationCallback.onAdsRemovalActivation();
+    if (mActivationResult)
+    {
+      for (AdsRemovalActivationCallback callback : mActivationCallbacks)
+        callback.onAdsRemovalActivation();
+    }
 
     dismissAllowingStateLoss();
   }
@@ -298,7 +306,7 @@ public class AdsRemovalPurchaseDialog extends BaseMwmDialogFragment implements A
   {
     float pricePerWeek = getProductDetailsForPeriod(Period.P1W).getPrice();
     float pricePerMonth = getProductDetailsForPeriod(Period.P1M).getPrice();
-    return pricePerWeek * WEEKS_IN_MONTH - pricePerMonth;
+    return pricePerWeek * WEEKS_IN_YEAR - pricePerMonth * MONTHS_IN_YEAR;
   }
 
   @Override

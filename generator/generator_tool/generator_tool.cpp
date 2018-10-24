@@ -16,6 +16,7 @@
 #include "generator/metalines_builder.hpp"
 #include "generator/osm_source.hpp"
 #include "generator/popular_places_section_builder.hpp"
+#include "generator/regions/collector_region_info.hpp"
 #include "generator/regions/regions.hpp"
 #include "generator/restriction_generator.hpp"
 #include "generator/road_access_generator.hpp"
@@ -176,6 +177,8 @@ DEFINE_string(geo_objects_features, "", "Input tmp.mwm file with geo objects.");
 DEFINE_string(ids_without_addresses, "", "Output file with objects ids without addresses.");
 DEFINE_string(geo_objects_key_value, "", "Output geo objects key-value file.");
 
+DEFINE_string(regions_features, "", "Input tmp.mwm file with regions.");
+
 // Common.
 DEFINE_bool(verbose, false, "Provide more detailed output.");
 
@@ -261,7 +264,6 @@ int main(int argc, char ** argv)
       FLAGS_geo_objects_key_value != "")
   {
     classificator::Load();
-    classif().SortClassificator();
   }
 
   // Load mwm tree only if we need it
@@ -339,10 +341,9 @@ int main(int argc, char ** argv)
 
   if (FLAGS_generate_geo_objects_index || FLAGS_generate_regions)
   {
-    if (FLAGS_output.empty() || FLAGS_intermediate_data_path.empty())
+    if (FLAGS_output.empty())
     {
-      LOG(LCRITICAL, ("Bad output or intermediate_data_path. Output:", FLAGS_output,
-                      "intermediate_data_path:", FLAGS_intermediate_data_path));
+      LOG(LCRITICAL, ("Bad output or intermediate_data_path. Output:", FLAGS_output));
       return -1;
     }
 
@@ -350,7 +351,7 @@ int main(int argc, char ** argv)
     auto const outFile = base::JoinPath(path, FLAGS_output + LOC_IDX_FILE_EXTENSION);
     if (FLAGS_generate_geo_objects_index)
     {
-      if (!feature::GenerateGeoObjectsData(genInfo.m_tmpDir, FLAGS_nodes_list_path, locDataFile))
+      if (!feature::GenerateGeoObjectsData(FLAGS_geo_objects_features, FLAGS_nodes_list_path, locDataFile))
       {
         LOG(LCRITICAL, ("Error generating geo objects data."));
         return -1;
@@ -367,7 +368,7 @@ int main(int argc, char ** argv)
 
     if (FLAGS_generate_regions)
     {
-      if (!feature::GenerateRegionsData(genInfo.m_tmpDir, locDataFile))
+      if (!feature::GenerateRegionsData(FLAGS_regions_features, locDataFile))
       {
         LOG(LCRITICAL, ("Error generating regions data."));
         return -1;
@@ -380,11 +381,28 @@ int main(int argc, char ** argv)
         LOG(LCRITICAL, ("Error generating regions index."));
         return -1;
       }
-      if (!feature::GenerateBorders(genInfo.m_tmpDir, outFile))
+      if (!feature::GenerateBorders(FLAGS_regions_features, outFile))
       {
         LOG(LCRITICAL, ("Error generating regions borders."));
         return -1;
       }
+    }
+  }
+
+  if (FLAGS_generate_regions_kv)
+  {
+    CHECK(FLAGS_generate_region_features, ("Option --generate_regions_kv can be used only "
+                                           "together with option --generate_region_features."));
+    auto const pathInRegionsCollector = genInfo.GetTmpFileName(genInfo.m_fileName,
+                                                               regions::CollectorRegionInfo::kDefaultExt);
+    auto const pathInRegionsTmpMwm = genInfo.GetTmpFileName(genInfo.m_fileName);
+    auto const pathOutRepackedRegionsTmpMwm = genInfo.GetTmpFileName(genInfo.m_fileName + "_repacked");
+    auto const pathOutRegionsKv = genInfo.GetIntermediateFileName(genInfo.m_fileName, ".jsonl");
+    if (!regions::GenerateRegions(pathInRegionsTmpMwm, pathInRegionsCollector, pathOutRegionsKv,
+                                  pathOutRepackedRegionsTmpMwm, FLAGS_verbose))
+    {
+      LOG(LCRITICAL, ("Error generating regions kv."));
+      return EXIT_FAILURE;
     }
   }
 
@@ -423,17 +441,6 @@ int main(int argc, char ** argv)
         LOG(LINFO, ("Processing metalines from", metalinesFilename));
         if (!feature::WriteMetalinesSection(datFile, metalinesFilename, osmToFeatureFilename))
           LOG(LCRITICAL, ("Error generating metalines section."));
-      }
-    }
-
-    if (FLAGS_generate_regions_kv)
-    {
-      CHECK(FLAGS_generate_region_features, ("Option --generate_regions_kv can be used only "
-                                             "together with option --generate_region_features."));
-      if (!regions::GenerateRegions(genInfo))
-      {
-        LOG(LCRITICAL, ("Error generating regions kv."));
-        return EXIT_FAILURE;
       }
     }
 

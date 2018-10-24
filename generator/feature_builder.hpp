@@ -262,7 +262,6 @@ public:
   /// @name Overwrite from base_type.
   //@{
   bool PreSerializeAndRemoveUselessNames(SupportingData const & data);
-  bool IsLocalityObject() const;
   void SerializeLocalityObject(serial::GeometryCodingParams const & params,
                                SupportingData & data) const;
   void Serialize(SupportingData & data, serial::GeometryCodingParams const & params) const;
@@ -275,7 +274,7 @@ namespace feature
 {
   /// Read feature from feature source.
   template <class TSource>
-  void ReadFromSourceRowFormat(TSource & src, FeatureBuilder1 & fb)
+  void ReadFromSourceRawFormat(TSource & src, FeatureBuilder1 & fb)
   {
     uint32_t const sz = ReadVarUint<uint32_t>(src);
     typename FeatureBuilder1::Buffer buffer(sz);
@@ -297,7 +296,7 @@ namespace feature
     while (currPos < fSize)
     {
       FeatureBuilder1 fb;
-      ReadFromSourceRowFormat(src, fb);
+      ReadFromSourceRawFormat(src, fb);
       toDo(fb, currPos);
       currPos = src.Pos();
     }

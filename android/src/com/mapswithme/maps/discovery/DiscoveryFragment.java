@@ -172,7 +172,7 @@ public class DiscoveryFragment extends BaseMwmToolbarFragment implements Discove
   public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState)
   {
     super.onViewCreated(view, savedInstanceState);
-    mToolbarController.setTitle(R.string.discovery_button_title);
+    getToolbarController().setTitle(R.string.discovery_button_title);
     initHotelGallery();
     initAttractionsGallery();
     initFoodGallery();
@@ -377,6 +377,7 @@ public class DiscoveryFragment extends BaseMwmToolbarFragment implements Discove
                                      item.getLat(), item.getLon());
   }
 
+  @NonNull
   @Override
   protected ToolbarController onCreateToolbarController(@NonNull View root)
   {
