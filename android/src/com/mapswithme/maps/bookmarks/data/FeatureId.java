@@ -4,6 +4,7 @@ import android.os.Parcel;
 import android.os.Parcelable;
 import android.support.annotation.NonNull;
 import android.text.TextUtils;
+import com.mapswithme.maps.LightFramework;
 
 public class FeatureId implements Parcelable
 {
@@ -112,6 +113,6 @@ public class FeatureId implements Parcelable
   @Override
   public String toString()
   {
-    return mMwmName + ":" + mMwmVersion + ":" + mFeatureIndex;
+    return LightFramework.nativeMakeFeatureId(mMwmName, mMwmVersion, mFeatureIndex);
   }
 }

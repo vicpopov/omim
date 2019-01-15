@@ -7,7 +7,6 @@ import android.os.Handler;
 import android.os.Message;
 import android.support.annotation.NonNull;
 import android.support.multidex.MultiDex;
-import android.util.Log;
 
 import com.appsflyer.AppsFlyerLib;
 import com.mapswithme.maps.analytics.ExternalLibrariesMediator;
@@ -44,11 +43,15 @@ import com.mapswithme.util.statistics.Statistics;
 
 import java.util.HashMap;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class MwmApplication extends Application
 {
+  @SuppressWarnings("NullableProblems")
+  @NonNull
   private Logger mLogger;
-  private final static String TAG = "MwmApplication";
+  public final static String TAG = "MwmApplication";
 
   private static MwmApplication sSelf;
   private SharedPreferences mPrefs;
@@ -151,10 +154,10 @@ public class MwmApplication extends Application
   public void onCreate()
   {
     super.onCreate();
-    mBackgroundListener = new TransitionListener(this);
     LoggerFactory.INSTANCE.initialize(this);
     mLogger = LoggerFactory.INSTANCE.getLogger(LoggerFactory.Type.MISC);
-    mLogger.d(TAG, "Application is created");
+    mBackgroundListener = new AppBaseTransitionListener(this);
+    getLogger().d(TAG, "Application is created");
     mMainLoopHandler = new Handler(getMainLooper());
     mMediator = new ExternalLibrariesMediator(this);
     mMediator.initSensitiveDataToleranceLibraries();
@@ -206,11 +209,11 @@ public class MwmApplication extends Application
     final boolean isInstallationIdFound = mMediator.setInstallationIdToCrashlytics();
 
     final String settingsPath = StorageUtils.getSettingsPath();
-    mLogger.d(TAG, "onCreate(), setting path = " + settingsPath);
+    getLogger().d(TAG, "onCreate(), setting path = " + settingsPath);
     final String filesPath = StorageUtils.getFilesPath(this);
-    mLogger.d(TAG, "onCreate(), files path = " + filesPath);
+    getLogger().d(TAG, "onCreate(), files path = " + filesPath);
     final String tempPath = StorageUtils.getTempPath(this);
-    mLogger.d(TAG, "onCreate(), temp path = " + tempPath);
+    getLogger().d(TAG, "onCreate(), temp path = " + tempPath);
 
     // If platform directories are not created it means that native part of app will not be able
     // to work at all. So, we just ignore native part initialization in this case, e.g. when the
@@ -368,6 +371,12 @@ public class MwmApplication extends Application
   private static native void nativeProcessTask(long taskPointer);
   private static native void nativeAddLocalization(String name, String value);
 
+  @NonNull
+  public Logger getLogger()
+  {
+    return mLogger;
+  }
+
   private static class VisibleAppLaunchListener implements AppBackgroundTracker.OnVisibleAppLaunchListener
   {
     @Override
@@ -398,26 +407,5 @@ public class MwmApplication extends Application
 
     @Override
     public void onProgress(String countryId, long localSize, long remoteSize) {}
-  }
-
-  private static class TransitionListener implements AppBackgroundTracker.OnTransitionListener
-  {
-    @NonNull
-    private final MwmApplication mApplication;
-
-    TransitionListener(@NonNull MwmApplication application)
-    {
-      mApplication = application;
-    }
-
-    @Override
-    public void onTransit(boolean foreground)
-    {
-      if (!foreground && LoggerFactory.INSTANCE.isFileLoggingEnabled())
-      {
-        Log.i(TAG, "The app goes to background. All logs are going to be zipped.");
-        LoggerFactory.INSTANCE.zipLogs(null);
-      }
-    }
   }
 }

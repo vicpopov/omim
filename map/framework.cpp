@@ -325,12 +325,6 @@ void Framework::OnViewportChanged(ScreenBase const & screen)
     m_viewportChanged(screen);
 }
 
-void Framework::StopLocationFollow()
-{
-  if (m_drapeEngine != nullptr)
-    m_drapeEngine->StopLocationFollow();
-}
-
 bool Framework::IsEnoughSpaceForMigrate() const
 {
   return GetPlatform().GetWritableStorageStatus(GetStorage().GetMaxMwmSizeBytes()) ==
@@ -556,6 +550,10 @@ Framework::Framework(FrameworkParams const & params)
 
   m_notificationManager.Load();
   m_notificationManager.TrimExpired();
+
+  alohalytics::Stats::Instance().LogEvent("UGC_ReviewNotification_queue",
+    {{"unshown", std::to_string(m_notificationManager.GetCandidatesCount())}});
+
   eye::Eye::Instance().TrimExpired();
   eye::Eye::Instance().Subscribe(&m_notificationManager);
 
@@ -1216,6 +1214,12 @@ void Framework::GetTouchRect(m2::PointD const & center, uint32_t pxRadius, m2::A
 void Framework::SetViewportListener(TViewportChanged const & fn)
 {
   m_viewportChanged = fn;
+}
+
+void Framework::StopLocationFollow()
+{
+  if (m_drapeEngine != nullptr)
+    m_drapeEngine->StopLocationFollow();
 }
 
 void Framework::OnSize(int w, int h)
